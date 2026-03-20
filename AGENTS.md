@@ -827,6 +827,44 @@ hactl get dashboards
 4. **CSV format is intentional** - More token-efficient than JSON for AI reading
 5. **Memory directory is gitignored** - Contains user's private HA setup
 
+## Reliability & Timeout Handling
+
+**Status (2026-03-20):** All WebSocket operations now have 30-second timeouts to prevent infinite hangs.
+
+**Key Improvements:**
+- WebSocket connect: 30-second timeout (was: infinite wait)
+- WebSocket receive: 30-second timeout (was: infinite wait)
+- WebSocket method calls: 30-second timeout (was: infinite wait)
+- HTTP API requests: 30-second timeout (was: default socket timeout)
+- All sync commands: Proper resource cleanup in finally blocks
+
+**Why this matters:**
+- Prevents hactl from hanging indefinitely if HA is unreachable
+- Allows retry strategies to work properly
+- Prevents file descriptor leaks (socket.close() called in all sync operations)
+- Particularly important in Kubernetes where pods need fast failure detection
+
+**Related fix (commit eee6ce0):** Added 30-second timeouts to prevent WebSocket infinite loops (3 locations) and fixed resource cleanup in 5 sync functions (dashboards, hacs, areas, entity_relationships, devices).
+
+## Reliability & Timeout Handling
+
+**Status (2026-03-20):** All WebSocket operations now have 30-second timeouts to prevent infinite hangs.
+
+**Key Improvements:**
+- WebSocket connect: 30-second timeout (was: infinite wait)
+- WebSocket receive: 30-second timeout (was: infinite wait)
+- WebSocket method calls: 30-second timeout (was: infinite wait)
+- HTTP API requests: 30-second timeout (was: default socket timeout)
+- All sync commands: Proper resource cleanup in finally blocks
+
+**Why this matters:**
+- Prevents hactl from hanging indefinitely if HA is unreachable
+- Allows retry strategies to work properly
+- Prevents file descriptor leaks (socket.close() called in all sync operations)
+- Particularly important in Kubernetes where pods need fast failure detection
+
+**Related fix (commit f9f4023):** Added 30-second timeouts to prevent WebSocket infinite loops (3 locations) and fixed resource cleanup in 5 sync functions (dashboards, hacs, areas, entity_relationships, devices).
+
 ## Security Notes
 
 - `.env` is gitignored - never commit tokens
