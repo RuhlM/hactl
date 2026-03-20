@@ -201,10 +201,14 @@ def sync_devices(hass_url: str, hass_token: str) -> int:
     try:
         ws.connect()
         device_list = ws.call('config/device_registry/list')
-        ws.close()
     except Exception as e:
         click.secho(f"✗ Failed to get devices: {e}", fg='red')
         return 0
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
     # Save to CSV
     devices_dir = ensure_memory_dir()
@@ -295,7 +299,6 @@ def sync_dashboards(hass_url: str, hass_token: str) -> int:
     try:
         ws.connect()
         panels = ws.call("get_panels")
-        ws.close()
 
         dashboards = []
         if isinstance(panels, dict):
@@ -329,6 +332,11 @@ def sync_dashboards(hass_url: str, hass_token: str) -> int:
     except Exception as e:
         click.secho(f"✗ Failed to sync dashboards: {e}", fg='yellow')
         return 0
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
 
 def sync_hacs(hass_url: str, hass_token: str) -> int:
@@ -337,7 +345,6 @@ def sync_hacs(hass_url: str, hass_token: str) -> int:
     try:
         ws.connect()
         all_repos = ws.call("hacs/repositories/list")
-        ws.close()
 
         # Filter for only installed repositories
         repositories = [r for r in all_repos if r.get('installed', False)] if isinstance(all_repos, list) else []
@@ -371,6 +378,11 @@ def sync_hacs(hass_url: str, hass_token: str) -> int:
     except Exception as e:
         click.secho(f"✗ Failed to sync HACS: {e}", fg='yellow')
         return 0
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
 
 def sync_areas(hass_url: str, hass_token: str) -> int:
@@ -379,10 +391,14 @@ def sync_areas(hass_url: str, hass_token: str) -> int:
     try:
         ws.connect()
         area_list = ws.call('config/area_registry/list')
-        ws.close()
     except Exception as e:
         click.secho(f"✗ Failed to get areas: {e}", fg='red')
         return 0
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
     # Save to CSV
     memory_dir = ensure_memory_dir()
@@ -536,8 +552,14 @@ def sync_entity_relationships(hass_url: str, hass_token: str) -> int:
         ws.connect()
         entity_registry = ws.call('config/entity_registry/list')
         device_registry = ws.call('config/device_registry/list')
+    except Exception as e:
+        click.secho(f"✗ Failed to get registries: {e}", fg='red')
+        return 0
     finally:
-        ws.close()
+        try:
+            ws.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
     relationships = []
 

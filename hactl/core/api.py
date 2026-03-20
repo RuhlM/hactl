@@ -5,6 +5,7 @@ API request utilities for hactl
 import json
 import urllib.request
 import urllib.error
+import socket
 import click
 from typing import Optional, Dict, Any
 
@@ -35,8 +36,10 @@ def make_api_request(url: str, token: str, method: str = 'GET',
             req.data = json.dumps(data).encode('utf-8')
             req.get_method = lambda: method
 
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             return json.loads(response.read().decode())
+    except socket.timeout:
+        raise click.ClickException('API request timeout (30 seconds): Home Assistant not responding')
     except urllib.error.HTTPError as e:
         error_msg = f'HTTP {e.code} {e.reason}'
         if e.fp:

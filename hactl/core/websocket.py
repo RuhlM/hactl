@@ -8,6 +8,7 @@ import socket
 import base64
 import json
 import struct
+import time
 import click
 from urllib.parse import urlparse
 
@@ -20,6 +21,7 @@ class WebSocketClient:
         self.token = token
         self.sock = None
         self.req_id = 1
+        self.timeout = 30  # 30 second timeout for all operations
 
     def connect(self):
         """Connect to WebSocket and authenticate"""
@@ -31,7 +33,7 @@ class WebSocketClient:
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
         path = parsed.path.rstrip('/') + '/api/websocket'
 
-        self.sock = socket.create_connection((host, port))
+        self.sock = socket.create_connection((host, port), timeout=self.timeout)
         if parsed.scheme == 'https':
             context = ssl.create_default_context()
             self.sock = context.wrap_socket(self.sock, server_hostname=host)
@@ -56,9 +58,10 @@ class WebSocketClient:
         if b" 101 " not in buffer:
             raise click.ClickException('WebSocket handshake unsuccessful:\n' + buffer.decode(errors='ignore'))
 
-        # Authenticate
+        # Authenticate with timeout protection
         self.send_frame(json.dumps({"type": "auth", "access_token": self.token}).encode())
-        while True:
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
             msg = self.recv_json()
             if msg.get('type') == 'auth_ok':
                 break
@@ -66,6 +69,9 @@ class WebSocketClient:
                 continue
             if msg.get('type') == 'auth_invalid':
                 raise click.ClickException('Authentication failed')
+        else:
+            # Timeout occurred
+            raise click.ClickException(f'WebSocket authentication timeout after {self.timeout}s')
 
     def recv_exact(self, n):
         """Receive exactly n bytes"""
@@ -113,28 +119,40 @@ class WebSocketClient:
         self.sock.sendall(bytes(header) + masked)
 
     def recv_json(self):
-        """Receive JSON message"""
-        while True:
-            opcode, payload = self.recv_frame()
-            if opcode == 0x8:
-                raise click.ClickException('WebSocket closed by server')
-            if opcode == 0x1:
-                try:
-                    return json.loads(payload.decode())
-                except json.JSONDecodeError:
-                    continue
+        """Receive JSON message with timeout protection"""
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
+            try:
+                opcode, payload = self.recv_frame()
+                if opcode == 0x8:
+                    raise click.ClickException('WebSocket closed by server')
+                if opcode == 0x1:
+                    try:
+                        return json.loads(payload.decode())
+                    except json.JSONDecodeError:
+                        continue
+            except socket.timeout:
+                raise click.ClickException(f'WebSocket recv timeout after {self.timeout}s - connection stalled')
+        else:
+            # Timeout occurred
+            raise click.ClickException(f'WebSocket message timeout after {self.timeout}s - no valid JSON received')
 
     def call(self, message_type, **kwargs):
-        """Call WebSocket API"""
+        """Call WebSocket API with timeout protection"""
         self.req_id += 1
         message = {"id": self.req_id, "type": message_type, **kwargs}
         self.send_frame(json.dumps(message).encode())
-        while True:
+        
+        start_time = time.time()
+        while time.time() - start_time < self.timeout:
             msg = self.recv_json()
             if msg.get('id') == self.req_id:
                 if not msg.get('success', False):
                     raise click.ClickException(f"WebSocket call failed: {msg}")
                 return msg.get('result')
+        else:
+            # Timeout occurred
+            raise click.ClickException(f'WebSocket call timeout after {self.timeout}s - waiting for response with id={self.req_id}')
 
     def close(self):
         """Close WebSocket connection"""
