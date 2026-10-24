@@ -119,8 +119,9 @@ hactl get integrations               # Configured integrations
 hactl get automations                # All automations
 hactl get dashboards                 # All dashboards
 hactl get services                   # Available services
+hactl get zombie-devices             # Triage orphans / stalled / disabled / restored / unavailable entities
 
-# And 21 more commands for scenes, scripts, helpers, calendars, etc.
+# And 20 more commands for scenes, scripts, helpers, calendars, etc.
 ```
 
 **Supported sensor types:** battery, temperature, humidity, co2, power, energy, pressure, motion, etc.
@@ -137,6 +138,75 @@ hactl update dashboard <url_path> --from <yaml_file> --create
 # Update helper configuration
 hactl update helper <yaml_file>
 ```
+
+### DELETE - Remove Resources (kubectl-style)
+
+Generic deletion for `device`, `entity`, and `config-entry`. Default is
+dry-run unless `--yes`. Every real run writes a JSON audit log.
+
+```bash
+# Singular by id
+hactl delete device <id-or-name>
+hactl delete entity <entity_id>
+hactl delete config-entry <entry_id>
+
+# Bulk by filter
+hactl delete devices --filter category=orphan
+hactl delete entities --filter platform=tibber_prices
+hactl delete config-entries --filter state=not_loaded
+
+# Recommended safe pattern for HAGHS-parity zombie cleanup:
+# --state-only unavailable drops live entities BEFORE the safety
+# predicate ever sees them.
+hactl delete entities --filter platform=mobile_app \
+                      --state-only unavailable --dry-run
+
+# From a manifest (e.g. piped from zombie-devices)
+hactl get zombie-devices -o json --category orphan \
+  | hactl delete -f - --dry-run
+
+# Common flags
+[--dry-run] [--yes] [--limit N] [--force] [--audit PATH] [--quiet]
+```
+
+The live-state safety predicate refuses to delete an entity whose
+current state isn't `unavailable`/`unknown` (bulk: hard-refuse;
+singular: y/N prompt; `--force` bypasses).
+
+See [`docs/delete.md`](docs/delete.md) for the full SOP, safety
+predicate, and audit-log format.
+
+### LABEL - Manage Registry Labels (kubectl-style)
+
+Generic add/remove of HA `label_registry` labels on devices and
+entities. Default is dry-run unless `--yes`. Idempotent.
+
+```bash
+# List every label + per-label usage counts
+hactl label list
+
+# Apply a label
+hactl label apply --device "Soil sensor 3" --label haghs_ignore --yes
+hactl label apply --entity sensor.foo      --label haghs_ignore --yes
+
+# Bulk-apply from a noise allowlist YAML
+# (cberg `noise_allowlist.yaml` shape: flaky_zigbee_devices,
+#  flaky_iot_devices)
+hactl label apply --from-allowlist noise_allowlist.yaml \
+                  --label haghs_ignore --dry-run
+
+# Remove a label
+hactl label remove --device "Soil sensor 3" --label haghs_ignore --yes
+
+# Common flags
+[--dry-run] [--yes] [--limit N] [--audit PATH] [--quiet]
+```
+
+The `haghs_ignore` label is honoured by `hactl get zombie-devices`
+and `hactl doctor` (and by HAGHS) — labelled records drop out of
+every category. See [`docs/label.md`](docs/label.md) for the full
+SOP, allowlist YAML format, idempotency contract, and audit-log
+description.
 
 ### BATTERY - Monitoring Utilities (3 commands)
 
@@ -352,6 +422,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **[CLAUDE.md](CLAUDE.md)** - Detailed technical documentation for AI assistants and developers
 - **[test/README.md](test/README.md)** - Test suite documentation
+- **[docs/get-zombie-devices.md](docs/get-zombie-devices.md)** - Triage workflow for `hactl get zombie-devices`
 
 ---
 
