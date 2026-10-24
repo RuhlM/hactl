@@ -49,7 +49,8 @@ def get_activity(format_type='table'):
             try:
                 hour = datetime.fromisoformat(when.replace('Z', '+00:00')).hour
                 activity_by_hour[hour] += 1
-            except:
+            except (ValueError, AttributeError, TypeError) as e:
+                # Skip entries with unparseable timestamps (non-critical)
                 pass
         
         recent_changes.append({
