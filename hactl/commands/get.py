@@ -323,3 +323,53 @@ def get_todos(format):
     """Get todo list items"""
     from hactl.handlers import todos
     todos.get_todos(format)
+
+
+@get_group.command('zombie-devices')
+@click.option('--format', '-o', '-f', 'format',
+              type=click.Choice(['table', 'json', 'csv', 'yaml']),
+              default='table',
+              help='Output format')
+@click.option('--category',
+              type=click.Choice(['orphan', 'stalled', 'disabled', 'restored',
+                                 'unavailable_entity']),
+              default=None,
+              help='Filter to a single zombie category')
+@click.option('--no-truncate', is_flag=True, default=False,
+              help='Show all rows in table format (default truncates to top 20 per category)')
+@click.option('--ignore-label', default=None,
+              help='Skip entities/devices carrying this label '
+                   '(default haghs_ignore, env HACTL_IGNORE_LABEL).')
+def get_zombie_devices(format, category, no_truncate, ignore_label):
+    """Get triage-grade list of zombie devices and restored entities
+
+    Surfaces the per-record detail behind `hactl doctor --check zombie_devices`:
+    full device IDs, real integration domain (resolved from config_entries,
+    not manufacturer), area name, parent hub, last_seen — everything you need
+    to walk through and decide remove / keep / fix-integration.
+
+    Read-only. Removing devices is a manual action in the HA UI.
+
+    Categories:
+
+    \b
+        orphan              — device has no enabled entities
+        stalled             — device has entities, all unavailable
+        disabled            — device.disabled_by is set
+        restored            — entity loaded from history (integration gone)
+        unavailable_entity  — single entity unavailable >15min on a healthy device
+
+    Examples:
+
+    \b
+        hactl get zombie-devices
+        hactl get zombie-devices --no-truncate
+        hactl get zombie-devices -o json
+        hactl get zombie-devices -o json --category orphan
+        hactl get zombie-devices -o json --category unavailable_entity
+        hactl get zombie-devices -o csv > /tmp/zombies.csv
+    """
+    from hactl.handlers import zombie_devices
+    zombie_devices.get_zombie_devices(
+        format_type=format, category=category, no_truncate=no_truncate,
+        ignore_label=ignore_label)
